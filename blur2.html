@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blur Racing Online</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #1a1a1a;
+            color: white;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        #game-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            background: #1a1a1a;
+        }
+
+        .car {
+            width: 50px;
+            height: 80px;
+            background: #ff3300;
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-radius: 10px;
+            transition: transform 0.1s;
+            z-index: 2;
+        }
+
+        .road {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background: #333333;
+            overflow: hidden;
+        }
+
+        .road::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(90deg, 
+                    #2c2c2c 0px, #2c2c2c 2px,
+                    transparent 2px, transparent 98%,
+                    #2c2c2c 98%, #2c2c2c 100%),
+                linear-gradient(#444 2px, transparent 2px);
+            background-size: 100% 100%, 100% 30px;
+            animation: roadMove 0.3s linear infinite;
+            opacity: 0.5;
+        }
+
+        .side-lines {
+            position: absolute;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(90deg, 
+                    #ffdd00 0px, #ffdd00 6px,
+                    transparent 6px, transparent calc(100% - 6px),
+                    #ffdd00 calc(100% - 6px), #ffdd00 100%);
+            background-size: 100% 100%;
+        }
+
+        .obstacle {
+            width: 40px;
+            height: 70px;
+            background: #666;
+            position: absolute;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        #score {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 20px;
+            z-index: 100;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        #start-screen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 100;
+            background: rgba(0,0,0,0.8);
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            font-size: 18px;
+            background: #ff3300;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #ff5500;
+        }
+
+        @keyframes roadMove {
+            from { background-position: 0 0; }
+            to { background-position: 0 30px; }
+        }
+
+        .game-over {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 100;
+            background: rgba(0,0,0,0.8);
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 101;
+            display: flex;
+            gap: 20px;
+        }
+
+        .control-btn {
+            width: 60px;
+            height: 60px;
+            background: #ff3300;
+            color: white;
+            font-size: 24px;
+            border: none;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .control-btn:hover {
+            background: #ff5500;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="score">Score: 0</div>
+        <div class="road">
+            <div class="side-lines"></div>
+        </div>
+        <div class="car"></div>
+
+        <div class="controls">
+            <button class="control-btn" onclick="moveLeft()">&#8592;</button>
+            <button class="control-btn" onclick="moveRight()">&#8594;</button>
+        </div>
+
+        <div id="start-screen">
+            <h1>Blur Racing Online</h1>
+            <button class="btn" onclick="startGame()">O'yinni Boshlash</button>
+            <p>Boshqarish: ← → klavishalari yoki tugmalar</p>
+        </div>
+
+        <div class="game-over" id="game-over">
+            <h1>O'yin Tugadi!</h1>
+            <p>Sizning hisobingiz: <span id="final-score">0</span></p>
+            <button class="btn" onclick="restartGame()">Qayta O'ynash</button>
+        </div>
+    </div>
+
+    <script>
+        const car = document.querySelector('.car');
+        const gameContainer = document.getElementById('game-container');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over');
+        const scoreElement = document.getElementById('score');
+
+        let gameStarted = false;
+        let score = 0;
+        let carPosition = 50;
+        let obstacles = [];
+        let gameLoop;
+
+        function startGame() {
+            gameStarted = true;
+            startScreen.style.display = 'none';
+            score = 0;
+            updateScore();
+            gameLoop = setInterval(update, 30);
+            spawnObstacle();
+        }
+
+        function restartGame() {
+            gameOverScreen.style.display = 'none';
+            obstacles.forEach(obs => obs.remove());
+            obstacles = [];
+            startGame();
+        }
+
+        function updateScore() {
+            scoreElement.textContent = `Score: ${score}`;
+        }
+
+        function spawnObstacle() {
+            if (!gameStarted) return;
+
+            const obstacle = document.createElement('div');
+            obstacle.className = 'obstacle';
+            obstacle.style.left = Math.random() * (gameContainer.offsetWidth - 40) + 'px';
+            obstacle.style.top = '-70px';
+            gameContainer.appendChild(obstacle);
+            obstacles.push(obstacle);
+
+            setTimeout(() => spawnObstacle(), 1500);
+        }
+
+        function update() {
+            score++;
+            updateScore();
+
+            obstacles.forEach((obstacle, index) => {
+                const top = parseInt(obstacle.style.top) || 0;
+                obstacle.style.top = (top + 10) + 'px';
+
+                if (top > gameContainer.offsetHeight) {
+                    obstacle.remove();
+                    obstacles.splice(index, 1);
+                }
+
+                if (isColliding(car, obstacle)) {
+                    gameOver();
+                }
+            });
+        }
+
+        function isColliding(car, obstacle) {
+            const carRect = car.getBoundingClientRect();
+            const obstacleRect = obstacle.getBoundingClientRect();
+
+            return !(carRect.right < obstacleRect.left || 
+                    carRect.left > obstacleRect.right || 
+                    carRect.bottom < obstacleRect.top || 
+                    carRect.top > obstacleRect.bottom);
+        }
+
+        function gameOver() {
+            gameStarted = false;
+            clearInterval(gameLoop);
+            document.getElementById('final-score').textContent = score;
+            gameOverScreen.style.display = 'block';
+        }
+
+        function moveLeft() {
+            if (carPosition > 0) {
+                carPosition -= 5;
+                car.style.left = `${carPosition}%`;
+            }
+        }
+
+        function moveRight() {
+            if (carPosition < 100) {
+                carPosition += 5;
+                car.style.left = `${carPosition}%`;
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (!gameStarted) return;
+
+            if (e.key === 'ArrowLeft') moveLeft();
+            if (e.key === 'ArrowRight') moveRight();
+        });
+    </script>
+</body>
+</html>
+<div id="game-container">
+    <div id="score">Score: 0</div>
+    <div class="road">
+        <div class="side-lines"></div>
+    </div>
+    <div class="car">
+        <img src="path-to-your-image/cob.webp" alt="Hero Car" class="hero-car">
+    </div>
+
+    <div id="start-screen">
+        <h1>Blur Racing Online</h1>
+        <button class="btn" onclick="startGame()">O'yinni Boshlash</button>
+        <p>Boshqarish: ← → klavishalari yoki tugmalar</p>
+    </div>
+
+    <div class="game-over" id="game-over">
+        <h1>O'yin Tugadi!</h1>
+        <p>Sizning hisobingiz: <span id="final-score">0</span></p>
+        <button class="btn" onclick="restartGame()">Qayta O'ynash</button>
+    </div>
+</div>
+.car {
+    width: 60px;
+    height: 100px;
+    position: absolute;
+    bottom: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+}
+
+.hero-car {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 10px;
+}
